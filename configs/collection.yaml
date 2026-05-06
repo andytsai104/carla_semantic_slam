@@ -1,0 +1,41 @@
+carla:
+  host: "localhost"
+  port: 2000
+  timeout: 10.0
+  town: null                  # Example: "Town03". Use null to keep the currently loaded map.
+  synchronous_mode: true
+  fixed_delta_seconds: 0.05
+
+traffic_manager:
+  enabled: true
+  port: 8000
+  synchronous_mode: true
+  global_distance_to_leading_vehicle: 2.5
+  seed: 42
+
+ego_vehicle:
+  blueprint: "vehicle.tesla.model3"
+  spawn_index: 0              # Change this if the vehicle spawns in a bad location.
+  autopilot: true
+
+sensors:
+  camera:
+    width: 640
+    height: 480
+    fov: 90
+    sensor_tick: 0.0          # 0.0 = every simulation tick.
+    transform:
+      x: 1.5
+      y: 0.0
+      z: 2.4
+      roll: 0.0
+      pitch: 0.0
+      yaw: 0.0
+
+collection:
+  run_name: "run_001"
+  output_dir: "data/raw"
+  num_samples: 500
+  save_every_n_frames: 2
+  warmup_ticks: 20
+  max_sync_wait_seconds: 0.5

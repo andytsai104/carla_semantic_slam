@@ -1,0 +1,31 @@
+input:
+  # Output folder from scripts/collect_data.py
+  run_dir: "data/raw/run_001"
+
+projection:
+  # Use 4 or 8 first to avoid huge point clouds. Use 1 only for small tests.
+  pixel_stride: 4
+  min_depth_m: 0.5
+  max_depth_m: 80.0
+
+  # CARLA semantic labels to ignore: 0=Unlabeled, 13=Sky.
+  ignore_labels: [0, 13]
+
+  # Keep memory under control. Set null to disable.
+  max_points_per_frame: 20000
+
+processing:
+  # Process every nth saved sample. Increase this if the run is large.
+  sample_stride: 1
+
+  # Set null to process the whole run.
+  max_samples: null
+
+output:
+  pointcloud_path: "outputs/maps/semantic_map_run_001.ply"
+  npz_path: "outputs/maps/semantic_map_run_001.npz"
+  label_summary_csv: "outputs/maps/semantic_map_run_001_label_summary.csv"
+  label_summary_json: "outputs/maps/semantic_map_run_001_label_summary.json"
+
+  # Voxel downsample size in meters for PLY visualization.
+  voxel_size: 0.15

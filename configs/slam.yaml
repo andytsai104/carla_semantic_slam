@@ -1,0 +1,44 @@
+# Phase 3: RTAB-Map RGB-D SLAM configuration
+# This config is used by scripts/reconstruct_semantic_map_from_slam.py
+# and documents the ROS topics used by the replay/RTAB-Map launch file.
+
+input:
+  run_dir: data/raw/run_001
+  slam_pose_csv: outputs/slam/run_001/slam_poses.csv
+
+output:
+  pointcloud_path: outputs/maps/semantic_map_slam_run_001.ply
+  npz_path: outputs/maps/semantic_map_slam_run_001.npz
+  label_summary_csv: outputs/maps/semantic_map_slam_run_001_label_summary.csv
+  label_summary_json: outputs/maps/semantic_map_slam_run_001_label_summary.json
+
+projection:
+  pixel_stride: 4
+  min_depth_m: 0.5
+  max_depth_m: 80.0
+  ignore_labels: [0, 13]
+  max_points_per_frame: 8000
+
+processing:
+  sample_stride: 1
+  max_samples:
+  # Match each dataset row to the nearest SLAM pose by timestamp.
+  # The dataset timestamp is the CARLA sensor timestamp saved in poses.csv.
+  max_time_diff_sec: 0.20
+
+slam_pose:
+  # RGB-D odometry and RTAB-Map typically produce odom/map-frame poses.
+  # Use this when reconstructing the semantic map with estimated poses.
+  pose_source: slam
+  # If the point cloud looks mirrored or rotated, the first thing to check is
+  # whether your SLAM pose is camera_link, base_link, or odom frame.
+  pose_frame: odom
+
+visualization:
+  voxel_size: 0.15
+
+ros_topics:
+  rgb_image: /camera/color/image_raw
+  depth_image: /camera/depth/image_rect_raw
+  camera_info: /camera/color/camera_info
+  odom: /odom
