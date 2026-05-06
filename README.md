@@ -188,11 +188,90 @@ outputs/maps/semantic_map_run_001_label_summary.json
 
 ## Phase 3: ROS 2 replay + RTAB-Map RGB-D SLAM
 
-Phase 3 replays the saved RGB-D dataset into ROS 2 and lets RTAB-Map estimate odometry/SLAM poses.
+Phase 3 replaces the CARLA ground-truth pose used in Phase 2 with an estimated pose from a ROS 2 RGB-D SLAM pipeline. The saved CARLA dataset is replayed as ROS 2 topics, RTAB-Map estimates odometry, the odometry is logged to CSV, and the semantic point cloud is reconstructed again using the estimated SLAM poses.
 
-You do **not** need to start CARLA for Phase 3.
+Important: **CARLA is not needed for Phase 3** if `data/raw/run_001` has already been collected. CARLA is only needed for Phase 1 data collection.
 
-### 1. Build/source the ROS 2 package
+### Phase 3 pipeline
+
+```text
+saved CARLA RGB-D dataset
+→ dataset_rgbd_publisher.py
+→ /camera/color/image_raw
+→ /camera/depth/image_rect_raw
+→ /camera/color/camera_info
+→ rgbd_odometry
+→ /odom
+→ rtabmap
+→ slam_pose_logger.py
+→ outputs/slam/run_001/slam_poses.csv
+→ reconstruct_semantic_map_from_slam.py
+→ outputs/maps/semantic_map_slam_run_001.ply
+```
+
+### Phase 3 files
+
+```text
+ros2_ws/src/carla_semantic_slam_ros/
+├── package.xml
+├── setup.py
+├── setup.cfg
+├── launch/
+│   └── replay_rtabmap.launch.py
+└── carla_semantic_slam_ros/
+    ├── dataset_rgbd_publisher.py
+    └── slam_pose_logger.py
+
+configs/slam.yaml
+scripts/reconstruct_semantic_map_from_slam.py
+src/carla_semantic_slam/slam/slam_pose_reader.py
+docs/phase3_rtabmap_integration.md
+```
+
+### Step 0: make sure Phase 1 data exists
+
+From the project root:
+
+```bash
+cd /home/andy/ros2_projects/carla_semantic_slam
+
+ls data/raw/run_001
+ls data/raw/run_001/rgb | head
+ls data/raw/run_001/depth | head
+ls data/raw/run_001/semantic | head
+
+find data/raw/run_001/rgb -type f | wc -l
+find data/raw/run_001/depth -type f | wc -l
+find data/raw/run_001/semantic -type f | wc -l
+```
+
+Expected structure:
+
+```text
+data/raw/run_001/
+├── rgb/              # RGB PNG files
+├── depth/            # depth NPY files in meters
+├── depth_viz/
+├── semantic/         # raw semantic label PNG files
+├── semantic_viz/
+├── poses.csv
+└── metadata.json
+```
+
+The RGB, depth, and semantic folders should have the same number of files.
+
+### Step 1: install RTAB-Map ROS dependencies
+
+```bash
+sudo apt update
+sudo apt install -y \
+  ros-humble-rtabmap-ros \
+  ros-humble-cv-bridge \
+  ros-humble-image-transport \
+  ros-humble-tf2-ros
+```
+
+### Step 2: build the ROS 2 workspace
 
 ```bash
 cd /home/andy/ros2_projects/carla_semantic_slam/ros2_ws
@@ -201,9 +280,11 @@ colcon build --symlink-install
 source install/setup.bash
 ```
 
-### 2. Test the dataset publisher only
+If you edit any file inside `ros2_ws/src/carla_semantic_slam_ros`, rebuild with the same commands.
 
-Before launching RTAB-Map, make sure the replay topics publish at a stable rate.
+### Step 3: test the dataset replay publisher only
+
+Do this before running RTAB-Map. The goal is to prove that RGB, depth, and camera info are published at the same stable rate.
 
 Terminal 1:
 
@@ -225,6 +306,8 @@ Terminal 2:
 source /opt/ros/humble/setup.bash
 source /home/andy/ros2_projects/carla_semantic_slam/ros2_ws/install/setup.bash
 
+ros2 topic list | grep camera
+
 timeout 10 ros2 topic hz /camera/color/image_raw
 timeout 10 ros2 topic hz /camera/depth/image_rect_raw
 timeout 10 ros2 topic hz /camera/color/camera_info
@@ -238,7 +321,11 @@ Target result:
 /camera/color/camera_info      about 2 Hz
 ```
 
-Also check headers:
+If camera info is stable but RGB/depth are slow or missing, debug `dataset_rgbd_publisher.py` before launching RTAB-Map.
+
+### Step 4: check replay timestamps
+
+RTAB-Map is sensitive to timestamps. For this replay setup, all three messages should use the same wall-time ROS timestamp for each synchronized frame.
 
 ```bash
 ros2 topic echo /camera/color/image_raw/header --once
@@ -246,11 +333,32 @@ ros2 topic echo /camera/depth/image_rect_raw/header --once
 ros2 topic echo /camera/color/camera_info/header --once
 ```
 
-For the current replay setup, timestamps should be live ROS time, not tiny dataset times like `31 sec`.
+Good example:
 
-### 3. Launch RTAB-Map replay
+```text
+stamp:
+  sec: 177807xxxx
+  nanosec: ...
+frame_id: camera_link
+```
 
-Stop the standalone publisher first, then run:
+Potentially problematic example:
+
+```text
+stamp:
+  sec: 31
+  nanosec: ...
+```
+
+If the timestamp looks like tiny dataset time, launch with:
+
+```bash
+-p use_wall_time:=true
+```
+
+### Step 5: launch RTAB-Map replay
+
+Stop the standalone publisher first. Then launch the full Phase 3 pipeline:
 
 ```bash
 cd /home/andy/ros2_projects/carla_semantic_slam
@@ -266,24 +374,54 @@ ros2 launch carla_semantic_slam_ros replay_rtabmap.launch.py \
   use_wall_time:=true
 ```
 
-Check odometry:
+The launch file starts:
+
+```text
+1. dataset_rgbd_publisher
+2. static TF publisher
+3. rgbd_odometry
+4. rtabmap
+5. slam_pose_logger
+```
+
+The launch file is configured with approximate synchronization:
+
+```text
+approx_sync = true
+sync_queue_size = 30
+topic_queue_size = 30
+```
+
+### Step 6: check odometry and pose logging
+
+In another terminal:
 
 ```bash
+source /opt/ros/humble/setup.bash
+source /home/andy/ros2_projects/carla_semantic_slam/ros2_ws/install/setup.bash
+
 timeout 15 ros2 topic hz /odom
 ros2 topic echo /odom --once
 ```
 
-Check the pose log:
+Check the pose CSV:
 
 ```bash
+cd /home/andy/ros2_projects/carla_semantic_slam
 head outputs/slam/run_001/slam_poses.csv
 tail outputs/slam/run_001/slam_poses.csv
 ```
 
-### 4. Reconstruct semantic map using SLAM poses
+If `/odom` is publishing and `slam_poses.csv` is filling with rows, Phase 3 replay is working.
+
+### Step 7: reconstruct semantic map using SLAM poses
+
+After the replay has produced `outputs/slam/run_001/slam_poses.csv`, run:
 
 ```bash
+cd /home/andy/ros2_projects/carla_semantic_slam
 conda activate carla_semantic
+
 python scripts/reconstruct_semantic_map_from_slam.py --config configs/slam.yaml
 python scripts/visualize_pointcloud.py outputs/maps/semantic_map_slam_run_001.ply
 ```
@@ -298,7 +436,67 @@ outputs/maps/semantic_map_slam_run_001_label_summary.csv
 outputs/maps/semantic_map_slam_run_001_label_summary.json
 ```
 
----
+### Phase 3 troubleshooting
+
+#### `Missing poses.csv`
+
+You are probably launching from inside `ros2_ws`, so `$(pwd)` points to the wrong folder. Use absolute paths:
+
+```bash
+run_dir:=/home/andy/ros2_projects/carla_semantic_slam/data/raw/run_001
+```
+
+#### Camera info is 2 Hz, but RGB/depth are slow
+
+This means the replay publisher is not publishing a synchronized triplet correctly. Test only the publisher first and check:
+
+```bash
+timeout 10 ros2 topic hz /camera/color/image_raw
+timeout 10 ros2 topic hz /camera/depth/image_rect_raw
+timeout 10 ros2 topic hz /camera/color/camera_info
+```
+
+All three should be around the same rate.
+
+#### RTAB-Map says it did not receive synchronized data
+
+Make sure the launch file uses:
+
+```text
+approx_sync = true
+sync_queue_size = 30
+topic_queue_size = 30
+```
+
+Also reduce replay speed:
+
+```bash
+rate_hz:=1.0
+```
+
+#### TF extrapolation error
+
+Use wall-time replay:
+
+```bash
+use_wall_time:=true
+```
+
+This avoids mixing dataset timestamps with live TF timestamps.
+
+#### `/odom` does not publish
+
+Possible causes:
+
+- RGB/depth/camera_info are not stable.
+- RGB/depth/camera_info timestamps do not match.
+- Depth encoding/scale is wrong.
+- Scene texture is too weak for visual odometry.
+- Motion between frames is too large.
+- Frame convention or static TF needs adjustment.
+
+For the final report, keep Phase 2 as the reliable mapping result and present Phase 3 as the SLAM integration extension.
+
 
 ## Core projection idea
 
