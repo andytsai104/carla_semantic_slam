@@ -1,6 +1,6 @@
 input:
   # Output folder from scripts/collect_data.py
-  run_dir: "data/raw/run_001"
+  run_dir: "data/raw/run_002"
 
 projection:
   # Use 4 or 8 first to avoid huge point clouds. Use 1 only for small tests.
@@ -22,10 +22,10 @@ processing:
   max_samples: null
 
 output:
-  pointcloud_path: "outputs/maps/semantic_map_run_001.ply"
-  npz_path: "outputs/maps/semantic_map_run_001.npz"
-  label_summary_csv: "outputs/maps/semantic_map_run_001_label_summary.csv"
-  label_summary_json: "outputs/maps/semantic_map_run_001_label_summary.json"
+  pointcloud_path: "outputs/maps/semantic_map_run_002.ply"
+  npz_path: "outputs/maps/semantic_map_run_002.npz"
+  label_summary_csv: "outputs/maps/semantic_map_run_002_label_summary.csv"
+  label_summary_json: "outputs/maps/semantic_map_run_002_label_summary.json"
 
   # Voxel downsample size in meters for PLY visualization.
   voxel_size: 0.15

@@ -11,6 +11,7 @@ traffic_manager:
   port: 8000
   synchronous_mode: true
   global_distance_to_leading_vehicle: 2.5
+  global_speed_difference: -0.5
   seed: 42
 
 ego_vehicle:
@@ -33,9 +34,9 @@ sensors:
       yaw: 0.0
 
 collection:
-  run_name: "run_001"
+  run_name: "run_002"
   output_dir: "data/raw"
-  num_samples: 500
+  num_samples: 400
   save_every_n_frames: 2
   warmup_ticks: 20
   max_sync_wait_seconds: 0.5
