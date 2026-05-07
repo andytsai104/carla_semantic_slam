@@ -12,6 +12,7 @@ def setup_traffic_manager(client: carla.Client, cfg: Dict[str, Any]) -> Optional
     port = int(cfg.get("port", 8000))
     tm = client.get_trafficmanager(port)
     tm.set_global_distance_to_leading_vehicle(float(cfg.get("global_distance_to_leading_vehicle", 2.5)))
+    tm.global_percentage_speed_difference(float(cfg.get("global_speed_difference", -0.5)))
     tm.set_synchronous_mode(bool(cfg.get("synchronous_mode", True)))
     if "seed" in cfg:
         tm.set_random_device_seed(int(cfg["seed"]))
